@@ -28,6 +28,8 @@ async function bootstrap() {
 
   app.addHook('preHandler', authMiddleware)
 
+  app.get('/health', async () => ({ status: 'ok' }))
+
   await app.register(clienteRoutes, { prefix: '/api/clientes' })
   await app.register(projetoRoutes, { prefix: '/api/projetos' })
   await app.register(tarefaRoutes, { prefix: '/api/tarefas' })
