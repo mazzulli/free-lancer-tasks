@@ -1,0 +1,8 @@
+import type { FastifyRequest, FastifyReply } from 'fastify'
+
+export async function authMiddleware(request: FastifyRequest, reply: FastifyReply) {
+  const apiKey = request.headers['x-api-key']
+  if (!apiKey || apiKey !== process.env.API_KEY) {
+    reply.code(401).send({ error: 'Não autorizado. X-API-Key inválida.' })
+  }
+}

@@ -1,0 +1,89 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Cliente {
+  id          String      @id @default(uuid())
+  nome        String
+  razaoSocial String
+  email       String      @unique
+  cnpj        String      @unique
+  cep         String?
+  endereco    String?
+  numero      String?
+  complemento String?
+  bairro      String?
+  cidade      String?
+  estado      String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  projetos    Projeto[]
+  relatorios  Relatorio[]
+}
+
+model Projeto {
+  id         String      @id @default(uuid())
+  clienteId  String
+  titulo     String
+  descricao  String?
+  valorHora  Float
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  cliente    Cliente     @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  tarefas    Tarefa[]
+  relatorios Relatorio[]
+}
+
+model Tarefa {
+  id           String        @id @default(uuid())
+  projetoId    String
+  titulo       String
+  descricao    String?
+  status       String        @default("NOVA")
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  projeto      Projeto       @relation(fields: [projetoId], references: [id], onDelete: Cascade)
+  apontamentos Apontamento[]
+  documentos   Documento[]
+}
+
+model Apontamento {
+  id         String   @id @default(uuid())
+  tarefaId   String
+  data       DateTime
+  horaIni    String
+  horaFim    String
+  totalHoras Float
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  tarefa     Tarefa   @relation(fields: [tarefaId], references: [id], onDelete: Cascade)
+}
+
+model Documento {
+  id        String   @id @default(uuid())
+  tarefaId  String
+  nome      String
+  tipo      String
+  caminho   String
+  tamanho   Int
+  createdAt DateTime @default(now())
+  tarefa    Tarefa   @relation(fields: [tarefaId], references: [id], onDelete: Cascade)
+}
+
+model Relatorio {
+  id         String   @id @default(uuid())
+  clienteId  String
+  mes        Int
+  ano        Int
+  dados      String
+  totalHoras Float
+  valorTotal Float
+  createdAt  DateTime @default(now())
+  cliente    Cliente  @relation(fields: [clienteId], references: [id])
+  projetos   Projeto[]
+}
