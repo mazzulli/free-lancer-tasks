@@ -1,6 +1,5 @@
 import type { FastifyInstance } from 'fastify'
 import path from 'path'
-import fs from 'fs/promises'
 import { randomUUID } from 'crypto'
 import { PrismaTarefaRepository } from '../../infrastructure/repositories/PrismaTarefaRepository.js'
 import { PrismaProjetoRepository } from '../../infrastructure/repositories/PrismaProjetoRepository.js'
@@ -9,6 +8,7 @@ import { UpdateTarefaUseCase } from '../../application/use-cases/tasks/UpdateTar
 import { ListTarefasUseCase } from '../../application/use-cases/tasks/ListTarefasUseCase.js'
 import { GetTarefaUseCase } from '../../application/use-cases/tasks/GetTarefaUseCase.js'
 import { DeleteTarefaUseCase } from '../../application/use-cases/tasks/DeleteTarefaUseCase.js'
+import { uploadToR2, deleteFromR2 } from '../../infrastructure/storage/r2.js'
 
 export async function tarefaRoutes(app: FastifyInstance) {
   const repo = new PrismaTarefaRepository()
@@ -36,9 +36,7 @@ export async function tarefaRoutes(app: FastifyInstance) {
   app.delete<{ Params: { id: string } }>('/:id', async (req, reply) => {
     try {
       const docs = await new DeleteTarefaUseCase(repo).execute(req.params.id)
-      for (const doc of docs) {
-        await fs.unlink(doc.caminho).catch(() => {})
-      }
+      await Promise.allSettled(docs.map(d => deleteFromR2(d.caminho)))
       return reply.code(204).send()
     }
     catch (e: unknown) { reply.code(404).send({ error: (e as Error).message }) }
@@ -49,15 +47,11 @@ export async function tarefaRoutes(app: FastifyInstance) {
       const data = await req.file()
       if (!data) return reply.code(400).send({ error: 'Nenhum arquivo enviado' })
 
-      const uploadDir = path.resolve(process.env.UPLOAD_DIR ?? '../storage/uploads', req.params.id)
-      await fs.mkdir(uploadDir, { recursive: true })
-
       const ext = path.extname(data.filename)
-      const nomeArquivo = `${randomUUID()}${ext}`
-      const caminho = path.join(uploadDir, nomeArquivo)
+      const key = `${req.params.id}/${randomUUID()}${ext}`
 
       const buffer = await data.toBuffer()
-      await fs.writeFile(caminho, buffer)
+      const caminho = await uploadToR2(key, buffer, data.mimetype)
 
       const doc = await repo.addDocumento({
         id: randomUUID(),
@@ -76,7 +70,7 @@ export async function tarefaRoutes(app: FastifyInstance) {
   app.delete<{ Params: { id: string; docId: string } }>('/:id/documentos/:docId', async (req, reply) => {
     try {
       const doc = await repo.deleteDocumento(req.params.docId)
-      await fs.unlink(doc.caminho).catch(() => {})
+      await deleteFromR2(doc.caminho).catch(() => {})
       return reply.code(204).send()
     }
     catch (e: unknown) { reply.code(404).send({ error: (e as Error).message }) }

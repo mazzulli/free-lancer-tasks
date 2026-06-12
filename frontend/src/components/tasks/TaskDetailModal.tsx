@@ -139,7 +139,7 @@ export function TaskDetailModal({ tarefaId, onClose }: Props) {
                       {tarefa.documentos.map(doc => (
                         <div key={doc.id} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-dark-blue-200 border border-border text-sm">
                           {doc.tipo.startsWith('image') ? <Image size={15} className="text-neon-cyan shrink-0" /> : <FileText size={15} className="text-neon-pink shrink-0" />}
-                          <a href={`/uploads/${tarefaId}/${doc.caminho.split(/[\\/]/).pop()}`} target="_blank" rel="noreferrer" className="flex-1 truncate hover:text-neon-cyan transition-colors">{doc.nome}</a>
+                          <a href={doc.caminho} target="_blank" rel="noreferrer" className="flex-1 truncate hover:text-neon-cyan transition-colors">{doc.nome}</a>
                           <span className="text-xs text-muted-foreground shrink-0">{(doc.tamanho / 1024).toFixed(0)} KB</span>
                           <button onClick={() => setDeletingDoc(doc.id)} className="text-muted-foreground hover:text-destructive transition-colors"><Trash2 size={13} /></button>
                         </div>
