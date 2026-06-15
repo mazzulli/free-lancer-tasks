@@ -11,107 +11,116 @@ Sistema de controle de horas trabalhadas em tarefas freelancer, com geração de
 - **Tarefas** — múltiplos apontamentos de horas por tarefa, upload de documentos (PDF e imagens)
 - **Relatórios** — fechamento mensal por cliente com memória de cálculo detalhada por projeto e impressão
 
-## Pré-requisitos
+## Stack
+
+| Camada | Tecnologia |
+|--------|-----------|
+| Backend | Node.js 22 + Fastify 5 + Prisma 6 |
+| Banco de Dados | PostgreSQL (Neon — serverless, região `sa-east-1`) |
+| Armazenamento de Arquivos | Cloudflare R2 (S3-compatible) |
+| Frontend | React + Vite + TypeScript + Tailwind + shadcn/ui |
+| Hospedagem | Render.com (containers Docker) |
+
+## Pré-requisitos (desenvolvimento local)
 
 - Node.js 20+
 - npm 10+
+- Banco PostgreSQL acessível (ex: instância Neon) ou local via Docker
+- Bucket R2 na Cloudflare
 
-## Instalação
+## Configuração
 
-### 1. Clone ou extraia o projeto
+### Backend — `backend/.env`
 
-```bash
-cd "g:\Dev\Freelancer Tasks"
-```
+```env
+# PostgreSQL (Neon usa URL com pooler para a app e URL direta para migrações)
+DATABASE_URL="postgresql://user:password@host-pooler.region.aws.neon.tech/dbname?sslmode=require&channel_binding=require"
+DIRECT_URL="postgresql://user:password@host.region.aws.neon.tech/dbname?sslmode=require"
 
-### 2. Configurar o Backend
-
-```bash
-cd backend
-npm install
-```
-
-Copie o arquivo de configuração:
-
-```bash
-copy .env.example .env
-```
-
-Edite o `.env` e defina uma chave de API segura:
-
-```
-DATABASE_URL="file:../storage/database.db"
+# Autenticação da API
 API_KEY="sua-chave-secreta-aqui"
+
+# Porta do servidor
 PORT=3001
-UPLOAD_DIR="../storage/uploads"
+
+# Cloudflare R2
+R2_ACCOUNT_ID=seu_account_id
+R2_ACCESS_KEY_ID=sua_access_key_id
+R2_SECRET_ACCESS_KEY=sua_secret_access_key
+R2_BUCKET_NAME=nome-do-bucket
+R2_PUBLIC_URL=https://pub-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.r2.dev
+R2_TOKEN=seu_r2_token
 ```
 
-Crie a pasta de armazenamento e execute as migrações:
+> `DATABASE_URL` aponta para o endpoint com pooling de conexões (usado em runtime).  
+> `DIRECT_URL` aponta para o endpoint direto (usado pelo Prisma Migrate em deploys).
 
-```bash
-mkdir ..\storage
-npm run db:migrate
-```
+### Frontend — `frontend/.env`
 
-> Quando solicitado o nome da migração, digite: `initial`
-
-### 3. Configurar o Frontend
-
-```bash
-cd ..\frontend
-npm install
-```
-
-Copie e configure o `.env`:
-
-```bash
-copy .env.example .env
-```
-
-Edite o `.env` com a mesma chave definida no backend:
-
-```
+```env
 VITE_API_URL=http://localhost:3001
 VITE_API_KEY=sua-chave-secreta-aqui
 ```
 
-Instale os componentes do shadcn/ui:
+Em produção, `VITE_API_URL` deve apontar para a URL do serviço de backend no Render.
+
+## Instalação (desenvolvimento)
 
 ```bash
-npx shadcn@latest add button card dialog input label select badge table tabs separator scroll-area tooltip popover dropdown-menu
+# Backend
+cd backend
+npm install
+npm run db:migrate   # cria/atualiza tabelas no PostgreSQL
+
+# Frontend
+cd ../frontend
+npm install
 ```
 
 ## Executando o Projeto
 
-### Backend (terminal 1)
-
 ```bash
-cd backend
-npm run dev
+# Terminal 1 — Backend
+cd backend && npm run dev   # http://localhost:3001
+
+# Terminal 2 — Frontend
+cd frontend && npm run dev  # http://localhost:5173
 ```
 
-O servidor iniciará em `http://localhost:3001`
-
-### Frontend (terminal 2)
+## Testes (Backend)
 
 ```bash
-cd frontend
-npm run dev
+cd backend && npm test
 ```
 
-O app abrirá em `http://localhost:5173`
+Cobertura: validadores de domínio (CNPJ, CEP, e-mail), criação/reconstituição de entidades, regras de duplicidade.
 
-## Executando os Testes (Backend)
+## Deploy — Render.com
+
+Cada serviço é deployado como um container Docker independente no Render.
+
+### Backend
+
+- **Dockerfile**: `backend/Dockerfile`
+- **Build**: compila TypeScript, gera Prisma Client
+- **Start**: executa `prisma migrate deploy` e inicia o servidor Node.js
+- **Porta exposta**: `8000`
+- **Variáveis de ambiente**: configurar no painel do Render com os mesmos valores do `backend/.env`
+
+### Frontend
+
+- **Dockerfile**: `frontend/Dockerfile`
+- **Build**: gera bundle estático via Vite; as variáveis `VITE_API_KEY` e `VITE_API_URL` são passadas como `ARG` em tempo de build
+- **Servidor**: Nginx na porta `80`
+- **Variáveis de ambiente**: definir como Build Args no Render (`VITE_API_URL` com a URL do serviço backend)
+
+### Comandos úteis de banco em produção
 
 ```bash
-cd backend
-npm test
+# Dentro do container backend (ou via Render Shell):
+npx prisma migrate deploy   # aplica migrações pendentes
+npx prisma studio           # interface visual (apenas dev)
 ```
-
-Os testes cobrem:
-- Validação de CNPJ, CEP e e-mail
-- Criação e reconstituição de entidades de domínio
-- Regras de duplicidade (CNPJ e e-mail únicos)
 
 ## Estrutura do Projeto
 
@@ -121,9 +130,10 @@ Os testes cobrem:
 │   ├── src/
 │   │   ├── domain/         # Entidades, validadores, interfaces
 │   │   ├── application/    # Casos de uso (business logic)
-│   │   ├── infrastructure/ # Implementações Prisma
+│   │   ├── infrastructure/ # Implementações Prisma + R2
 │   │   └── http/           # Rotas Fastify e servidor
-│   └── tests/              # Testes unitários (Vitest)
+│   ├── tests/              # Testes unitários (Vitest)
+│   └── Dockerfile
 ├── frontend/               # React + Vite + TypeScript
 │   └── src/
 │       ├── components/     # Componentes reutilizáveis
@@ -132,7 +142,7 @@ Os testes cobrem:
 │       ├── types/          # Tipos TypeScript
 │       ├── lib/            # Utilitários e formatadores BR
 │       └── hooks/          # Hooks customizados
-└── storage/                # Banco SQLite e uploads (runtime, não versionado)
+│   └── Dockerfile
 ```
 
 ## API
@@ -149,7 +159,7 @@ Todas as rotas exigem o header `X-API-Key` com a chave configurada no `.env`.
 | POST | /api/projetos | Criar projeto |
 | GET | /api/tarefas | Listar tarefas |
 | POST | /api/tarefas | Criar tarefa |
-| POST | /api/tarefas/:id/documentos | Upload de documento |
+| POST | /api/tarefas/:id/documentos | Upload de documento (armazenado no R2) |
 | POST | /api/apontamentos | Registrar horas |
 | POST | /api/relatorios/generate | Gerar relatório mensal |
 | GET | /api/dashboard | Dados do dashboard |
@@ -161,4 +171,4 @@ Todas as rotas exigem o header `X-API-Key` com a chave configurada no `.env`.
 - CEP preenchido automaticamente via ViaCEP
 - Múltiplos apontamentos por tarefa (data + hora início/fim)
 - Relatório calcula: `total_horas × valor_hora_do_projeto`
-- Documentos salvos em `storage/uploads/{tarefaId}/`
+- Documentos enviados para o bucket R2; URL pública retornada pela API
